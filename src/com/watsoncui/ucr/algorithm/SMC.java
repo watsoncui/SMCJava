@@ -170,7 +170,7 @@ public class SMC {
 		return postProbList;
 	}
 	
-	public static List<Integer> samplingFromProbability(List<Double> posteriorList, int samples) {
+	public static List<Integer> samplingFromProbability(List<Double> posteriorList, Random generator, int samples) {
 		List<Double> cdf = new ArrayList<Double>(posteriorList.size() + 1);
 		cdf.add(0.0);
 		for (int i = 0; i < posteriorList.size(); i++) {
@@ -178,8 +178,6 @@ public class SMC {
 		}
 		
 		List<Integer> sampleList = new ArrayList<Integer>(samples);
-		
-		Random generator = new Random();
 		for (int i = 0; i < samples; i++) {
 			double rand = generator.nextDouble();
 			int j = 1;
@@ -238,11 +236,12 @@ public class SMC {
 		return newWeightList;
 	}
 	
-	public static void mainTask(String fileName) throws Exception {
+	public static void mainTask(String fileName, double alphaParam, int samplesParam, int transOrderParam) throws Exception {
 		//parameters
-		int transOrderParam = 2;
-		double alphaParam = 0.01;
-		int samplesParam = 100;
+
+		System.out.println("alphaParam = " + alphaParam);
+		System.out.println("samplesParam = " + samplesParam);
+		System.out.println("transOrderParam = " + transOrderParam);
 		int readsParam;
 		List<String> contentList = new ArrayList<String>();
 		
@@ -305,8 +304,8 @@ public class SMC {
 			List<Double> posteriorList = postProbability(singleReadList, importantWeightMatrix, weightList, readId, maxGroupId, samplesParam, alphaParam);
 			
 			System.out.println("Sampling");
-			
-			List<Integer> importantWeightList = samplingFromProbability(posteriorList, samplesParam);
+			Random generator = new Random();
+			List<Integer> importantWeightList = samplingFromProbability(posteriorList, generator, samplesParam);
 			for (Integer groupId:importantWeightList) {
 				if (groupId > maxGroupId) {
 					maxGroupId = groupId;
@@ -342,7 +341,45 @@ public class SMC {
 	}
 	
 	public static void main(String[] args) throws Exception {
-		mainTask(args[0]);
+		int transOrderParam = 2;
+		double alphaParam = 0.01;
+		int samplesParam = 100;
+		if (args.length == 1) {
+			mainTask(args[0], alphaParam, samplesParam, transOrderParam);
+		} else {
+			int pos = 0;
+			while (pos < args.length - 1) {
+				if (args[pos].charAt(0) == '-') {
+					switch (args[pos].charAt(1)) {
+					case 'a':
+					case 'A':
+						try {
+							alphaParam = Double.parseDouble(args[pos + 1]);
+						} catch (NullPointerException npe) {
+							System.out.println("Param alpha error! Use default value 0.01");
+							alphaParam = 0.01;
+						} catch (NumberFormatException nfe) {
+							System.out.println("Param alpha parse error! Use default value 0.01");
+							alphaParam = 0.01;
+						}
+						break;
+					case 'n':
+					case 'N':
+						try {
+							samplesParam = Integer.parseInt(args[pos + 1]);
+						} catch (NumberFormatException nfe) {
+							System.out.println("Param alpha parse error! Use default value 0.01");
+							alphaParam = 0.01;
+						}
+						break;
+					default:
+						break;
+					}
+				}
+				pos += 2;
+			}
+			mainTask(args[args.length - 1], alphaParam, samplesParam, transOrderParam);
+		}
 	}
 	
 	public static void permutationTest() {
