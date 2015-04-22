@@ -8,6 +8,8 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SMC {
 	
@@ -28,15 +30,15 @@ public class SMC {
 		return stringList;
 	}
 	
-	public static List<Double> startProbability(List<SingleRead> singleReadList, List<List<Integer>> importantWeightMatrix, int readId, int sampleId) {
+	public static List<Double> startProbability(List<SingleRead> singleReadList, List<List<Integer>> zMatrix, int readId, int sampleId) {
 		List<Integer> accuCountList = new ArrayList<Integer>();
 		List<Integer> transCountList = singleReadList.get(readId).getTransCountwithReverseList();
 		for (int j = 0; j < transCountList.size(); j+=4) {
 			Integer sum = transCountList.get(j) + transCountList.get(j + 1) + transCountList.get(j + 2) + transCountList.get(j + 3);
 			accuCountList.add(sum);
 		}
-		for (int i = 0; i < readId; i++) {
-			if (importantWeightMatrix.get(i).get(sampleId).equals(1)) {
+		for (int i = 0; i <= readId; i++) {
+			if (zMatrix.get(i).get(sampleId).equals(1)) {
 				transCountList = singleReadList.get(i).getTransCountwithReverseList();		
 				for (int j = 0; j < transCountList.size(); j+=4) {
 					Integer sum = transCountList.get(j) + transCountList.get(j + 1) + transCountList.get(j + 2) + transCountList.get(j + 3);
@@ -61,28 +63,28 @@ public class SMC {
 		
 	}
 	
-	public static List<Double> transProbability(List<SingleRead> singleReadList, List<List<Integer>> importantWeightMatrix, int readId, int sampleId, int groupId) {
+	public static List<Double> transProbability(List<SingleRead> singleReadList, List<List<Integer>> zMatrix, int readId, int sampleId, int groupId) {
 		List<Integer> accuCountList = new ArrayList<Integer>();
 		List<Integer> transCountList = singleReadList.get(readId).getTransCountwithReverseList();
 		for (int j = 0; j < transCountList.size(); j++) {
 			accuCountList.add(transCountList.get(j));
 		}
 		for (int i = 0; i < readId; i++) {
-			if (importantWeightMatrix.get(i).get(sampleId).equals(groupId)) {
+			if (zMatrix.get(i).get(sampleId).equals(groupId)) {
 				transCountList = singleReadList.get(i).getTransCountwithReverseList();		
 				for (int j = 0; j < transCountList.size(); j++) {
 					accuCountList.set(j, transCountList.get(j) + accuCountList.get(j));
 				}
 			}
 		}
-		int accuSum = 0;
-		for (Integer count:accuCountList) {
-			accuSum += count;
-		}
+		
 		List<Double> transProbList = new ArrayList<Double>(accuCountList.size());
 		
-		for (int i = 0; i < accuCountList.size(); i++) {
-			transProbList.add(((double) accuCountList.get(i)) / accuSum);
+		for (int i = 0; i < accuCountList.size(); i+=4) {
+			int accuSum = accuCountList.get(i) + accuCountList.get(i + 1) + accuCountList.get(i + 2) + accuCountList.get(i + 3);
+			for (int j = 0; j < 4; j++) {
+				transProbList.add(((double) accuCountList.get(i + j)) / accuSum);
+			}
 		}
 		
 		return transProbList;
@@ -90,7 +92,7 @@ public class SMC {
 	}
 	
 	
-	public static List<Double> postProbability(List<SingleRead> singleReadList, List<List<Integer>> importantWeightMatrix, List<Double> weightList, int readId, int maxGroupId, int samplesParam, double alpha) {
+	public static List<Double> postProbability(List<SingleRead> singleReadList, List<List<Integer>> zMatrix, List<Double> weightList, int readId, int maxGroupId, int samplesParam, double alpha) {
 		
 		List<Double> postProbList = new ArrayList<Double>(maxGroupId + 1);
 		
@@ -119,13 +121,13 @@ public class SMC {
 			}
 		}
 		for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
-			double startP = (startProbability(singleReadList, importantWeightMatrix, readId, sampleId)).get(startWhere);
+			double startP = (startProbability(singleReadList, zMatrix, readId, sampleId)).get(startWhere);
 			
 			//R code prior
 			int maxSampleGroup = 1;
 			for(int i = 1; i < readId; i++) {
-				if (importantWeightMatrix.get(i).get(sampleId) > maxSampleGroup) {
-					maxSampleGroup = importantWeightMatrix.get(i).get(sampleId);
+				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
+					maxSampleGroup = zMatrix.get(i).get(sampleId);
 				}
 			}
 			
@@ -134,7 +136,7 @@ public class SMC {
 				sampleCount[i] = 0;
 			}
 			for (int read = 0; read < readId; read++) {
-				sampleCount[importantWeightMatrix.get(read).get(sampleId) - 1]++;
+				sampleCount[zMatrix.get(read).get(sampleId) - 1]++;
 			}
 			
 			List<Double> priorProbList = new ArrayList<Double>(maxSampleGroup + 1);
@@ -143,8 +145,16 @@ public class SMC {
 			}
 			priorProbList.add(alpha/(alpha + readId));
 			
+//			for (int i = 0; i < priorProbList.size();i++) {
+//				System.out.println(priorProbList.get(i));
+//			}
+			
 			for (int groupId = 1; groupId <= maxSampleGroup + 1; groupId++) {
-				List<Double> transProbList = transProbability(singleReadList, importantWeightMatrix, readId, sampleId, groupId);
+				List<Double> transProbList = transProbability(singleReadList, zMatrix, readId, sampleId, groupId);
+//				System.out.println("group: " + groupId);
+//				for(int i = 0; i < transProbList.size(); i++) {
+//					System.out.println(transProbList.get(i));
+//				}
 				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId) * priorProbList.get(groupId - 1) * startP;
 				for (int k = 0; k < transProbList.size(); k++) {
 					probMatrix[groupId - 1][sampleId] *= Math.pow(transProbList.get(k), singleReadList.get(readId).getTransCountList().get(k));
@@ -159,6 +169,8 @@ public class SMC {
 			for (int j = 0; j < samplesParam; j++) {
 				sum += probMatrix[i][j];
 			}
+//			System.out.println("group: " + i);
+//			System.out.println("sum " + sum);
 			totalSum += sum;
 			postProbList.add(sum);
 		}
@@ -190,7 +202,7 @@ public class SMC {
 		return sampleList;
 	}
 	
-	public static List<Double> updateWeightList(List<SingleRead> singleReadList, List<List<Integer>> importantWeightMatrix, List<Double> weightList, int readId, int samplesParam) {
+	public static List<Double> updateWeightList(List<SingleRead> singleReadList, List<List<Integer>> zMatrix, List<Double> weightList, int readId, int samplesParam) {
 		List<Double> newWeightList = new ArrayList<Double>(weightList.size());
 		
 		//R code startwhere
@@ -214,15 +226,24 @@ public class SMC {
 		double totalSum = 0.0;
 		for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
 			
-			double startP = (startProbability(singleReadList, importantWeightMatrix, readId, sampleId)).get(startWhere);
+			double startP = (startProbability(singleReadList, zMatrix, readId, sampleId)).get(startWhere);
+			
+			//System.out.println(startP);
 			
 			int maxSampleGroup = 1;
-			for(int i = 1; i < readId; i++) {
-				if (importantWeightMatrix.get(i).get(sampleId) > maxSampleGroup) {
-					maxSampleGroup = importantWeightMatrix.get(i).get(sampleId);
+			for(int i = 1; i <= readId; i++) {
+				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
+					maxSampleGroup = zMatrix.get(i).get(sampleId);
 				}
 			}
-			List<Double> transProbList = transProbability(singleReadList, importantWeightMatrix, readId, sampleId, importantWeightMatrix.get(readId).get(sampleId));
+			List<Double> transProbList = transProbability(singleReadList, zMatrix, readId, sampleId, zMatrix.get(readId).get(sampleId));
+			System.out.println(sampleId);
+			System.out.println(zMatrix.get(readId).get(sampleId));
+			for (int i = 0; i < transProbList.size(); i++) {
+				System.out.print(transProbList.get(i));
+				System.out.print('\t');
+			}
+			System.out.println();
 			double probability = weightList.get(sampleId) * startP;
 			for (int k = 0; k < transProbList.size(); k++) {
 				probability *= Math.pow(transProbList.get(k), singleReadList.get(readId).getTransCountList().get(k));
@@ -259,22 +280,22 @@ public class SMC {
 		
 		System.out.println("Initializing...");
 		
-		readsParam = contentList.size();
-		
+		//readsParam = contentList.size();
+		readsParam = 2;
 		
 		//Initialize important weight matrix W(z)
-		List<List<Integer>> importantWeightMatrix = new ArrayList<List<Integer>>(readsParam);
+		List<List<Integer>> zMatrix = new ArrayList<List<Integer>>(readsParam);
 		List<Integer> sampleList = new ArrayList<Integer>(samplesParam);
 		for (int j = 0; j < samplesParam; j++) {
 			sampleList.add(1);
 		}
-		importantWeightMatrix.add(sampleList);
+		zMatrix.add(sampleList);
 		for (int i = 1; i < readsParam; i++) {
 			List<Integer> samplesList = new ArrayList<Integer>(samplesParam);
 			for (int j = 0; j < samplesParam; j++) {
 				samplesList.add(0);
 			}
-			importantWeightMatrix.add(samplesList);
+			zMatrix.add(samplesList);
 		}
 		
 		//Initialize weight list w
@@ -291,6 +312,13 @@ public class SMC {
 			singleReadList.add(new SingleRead(contentList.get(readId), samplesParam, transOrderParam, permutationList));
 		}
 		
+		System.out.println(singleReadList.get(0).getContent());
+		for (int i = 0; i < 16; i++) {
+			System.out.print(singleReadList.get(1).getTransCountwithReverseList().get(i));
+			System.out.print('\t');
+		}
+		System.out.println();
+		
 		System.out.println("Complete \n Calculating...");
 		
 		int maxGroupId = 1;
@@ -301,22 +329,38 @@ public class SMC {
 			System.out.println(readId);
 			System.out.println("Posterior Probability");
 			
-			List<Double> posteriorList = postProbability(singleReadList, importantWeightMatrix, weightList, readId, maxGroupId, samplesParam, alphaParam);
+			List<Double> posteriorList = postProbability(singleReadList, zMatrix, weightList, readId, maxGroupId, samplesParam, alphaParam);
+			
+			for (int i = 0; i < posteriorList.size(); i++) {
+				System.out.println(posteriorList.get(i));
+			}
 			
 			System.out.println("Sampling");
 			Random generator = new Random();
-			List<Integer> importantWeightList = samplingFromProbability(posteriorList, generator, samplesParam);
-			for (Integer groupId:importantWeightList) {
+			List<Integer> zList = samplingFromProbability(posteriorList, generator, samplesParam);
+			for (Integer groupId:zList) {
 				if (groupId > maxGroupId) {
 					maxGroupId = groupId;
 					break;
 				}
 			}
-			importantWeightMatrix.set(readId, importantWeightList);
+			zMatrix.set(readId, zList);
 			
+			int count_1 = 0;
+			for (int i = 0; i < zList.size(); i++) {
+				if(zList.get(i) == 1) {
+					count_1++;
+				}
+			}
+			System.out.println(count_1);
 			System.out.println("Updating weight");
 			
-			weightList = updateWeightList(singleReadList, importantWeightMatrix, weightList, readId, samplesParam);
+			weightList = updateWeightList(singleReadList, zMatrix, weightList, readId, samplesParam);
+			for (int i = 0; i < weightList.size(); i++) {
+				System.out.print(weightList.get(i));
+				System.out.print('\t');
+			}
+			System.out.println();
 		}
 		
 		System.out.println("Calculate complete \n Printing...");
@@ -329,9 +373,9 @@ public class SMC {
 		pw.println();
 		pw.println();
 		
-		for (int i = 0; i < importantWeightMatrix.size(); i++) {
-			for (int j = 0; j < importantWeightMatrix.get(i).size(); j++) {
-				pw.print(importantWeightMatrix.get(i).get(j));
+		for (int i = 0; i < zMatrix.size(); i++) {
+			for (int j = 0; j < zMatrix.get(i).size(); j++) {
+				pw.print(zMatrix.get(i).get(j));
 				pw.print('\t');
 			}
 			pw.println();
@@ -340,9 +384,9 @@ public class SMC {
 		pw.close();
 	}
 	
-	public static void main(String[] args) throws Exception {
+	public static void trueMain(String[] args) throws Exception {
 		int transOrderParam = 2;
-		double alphaParam = 0.01;
+		double alphaParam = 0.5;
 		int samplesParam = 100;
 		if (args.length == 1) {
 			mainTask(args[0], alphaParam, samplesParam, transOrderParam);
@@ -382,6 +426,12 @@ public class SMC {
 		}
 	}
 	
+	public static void main(String[] args) throws Exception {
+		//trueMain(args);
+		mainTask("/Users/mac/Desktop/6008/someProject/test.txt", 0.5, 100, 2);
+		//System.out.println(testCountSubstr("AAA","AA"));
+	}
+	
 	public static void permutationTest() {
 		char[] charArray = {'A', 'C', 'G', 'T'};
 		List<String> strList = getPermutations(charArray, 3);
@@ -389,5 +439,13 @@ public class SMC {
 			System.out.println(str);
 		}
 	}
-
+	public static int testCountSubstr(String str, String substr) {
+		int count = 0;
+		Pattern p = Pattern.compile(substr);
+		Matcher m = p.matcher(str);
+		while (m.find()) {
+			count++;
+		}
+		return count;
+	}
 }

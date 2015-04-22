@@ -2,6 +2,8 @@ package com.watsoncui.ucr.algorithm;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,23 +41,32 @@ public class SingleRead {
 				break;	
 			}
 		}
-		String reverse = String.valueOf(charList);
-		this.transCountList = new ArrayList<Integer>();
-		this.transCountwithReverseList = new ArrayList<Integer>();
+		String bChain = String.valueOf(charList);
+		String reverse = (new StringBuilder(content)).reverse().toString();
+		String bChainReverse = (new StringBuilder(bChain)).reverse().toString();
+		this.transCountList = countSubstr(content, permutationList);
+		List<Integer> temp = countSubstr(bChain, permutationList);
+		this.transCountwithReverseList = new ArrayList<Integer>(permutationList.size());
 		for (int i = 0; i < permutationList.size(); i++) {
-			transCountList.add(countSubstr(content, permutationList.get(i)));
-			transCountwithReverseList.add(transCountList.get(i) + countSubstr(reverse, permutationList.get(i)));
+			this.transCountwithReverseList.add(temp.get(i) + this.transCountList.get(i));
 		}
+		
 	}
 	
-	private int countSubstr(String str, String substr) {
-		int count = 0;
-		Pattern p = Pattern.compile(substr);
-		Matcher m = p.matcher(str);
-		while (m.find()) {
-			count++;
+	private List<Integer> countSubstr(String str, List<String> permutationList) {
+		List<Integer> integerList = new ArrayList<Integer>(permutationList.size());
+		Map<String, Integer> countMap = new TreeMap<String, Integer>();
+		for (String permutation:permutationList) {
+			countMap.put(permutation, 0);
 		}
-		return count;
+		for (int i = 0; i < str.length() - this.transOrder + 1; i++) {
+			String key = str.substring(i, i + this.transOrder);
+			countMap.put(key, countMap.get(key) + 1);
+		}
+		for (int i = 0; i < permutationList.size(); i++) {
+			integerList.add(countMap.get(permutationList.get(i)));
+		}
+		return integerList;
 	}
 
 	public String getContent() {
