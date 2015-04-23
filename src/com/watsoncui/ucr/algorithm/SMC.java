@@ -120,45 +120,103 @@ public class SMC {
 				probMatrix[i][j] = 0.0;
 			}
 		}
+		
+		//R code function post_p_temp 
 		for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
 			double startP = (startProbability(singleReadList, zMatrix, readId, sampleId)).get(startWhere);
 			
 			//R code prior
-			int maxSampleGroup = 1;
-			for(int i = 1; i < readId; i++) {
-				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
-					maxSampleGroup = zMatrix.get(i).get(sampleId);
+//			int maxSampleGroup = 1;
+//			for(int i = 1; i < readId; i++) {
+//				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
+//					maxSampleGroup = zMatrix.get(i).get(sampleId);
+//				}
+//			}
+			
+//			int[] sampleCount = new int[maxGroupId];
+//			for (int i = 0; i < maxGroupId; i++) {
+//				sampleCount[i] = 0;
+//			}
+//			for (int read = 0; read < readId; read++) {
+//				sampleCount[zMatrix.get(read).get(sampleId) - 1]++;
+//			}
+//			
+//			List<Double> priorProbList = new ArrayList<Double>(maxGroupId + 1);
+//			int countZero = 1;
+//			for (int i = 0; i < maxGroupId; i++) {
+//				if (sampleCount[i] > 0) {
+//					priorProbList.add(sampleCount[i]/(alpha + readId));
+//				} else {
+//					priorProbList.add(0.0);
+//					countZero++;
+//				}
+//			}
+//			priorProbList.add(alpha/(alpha + readId)/countZero);
+//			for (int i = 0; i < maxGroupId; i++) {
+//				if (sampleCount[i] == 0) {
+//					priorProbList.set(i, alpha/(alpha + readId)/countZero);
+//				}
+//			}
+			
+			
+//			for (int i = 0; i < priorProbList.size();i++) {
+//				System.out.println(priorProbList.get(i));
+//			}
+			
+			for (int groupId = 1; groupId <= maxGroupId + 1; groupId++) {
+				List<Double> transProbList = transProbability(singleReadList, zMatrix, readId, sampleId, groupId);
+//				System.out.println("group: " + groupId);
+//				for(int i = 0; i < transProbList.size(); i++) {
+//					System.out.println(transProbList.get(i));
+//				}
+//				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId) * priorProbList.get(groupId - 1) * startP;
+				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId) * startP;
+				for (int k = 0; k < transProbList.size(); k++) {
+					probMatrix[groupId - 1][sampleId] *= Math.pow(transProbList.get(k), singleReadList.get(readId).getTransCountList().get(k));
 				}
 			}
 			
-			int[] sampleCount = new int[maxSampleGroup];
-			for (int i = 0; i < maxSampleGroup; i++) {
+		}
+		
+		for (int i = 0; i < maxGroupId + 1; i++) {
+			double sum = 0.0;
+			for (int j = 0; j < samplesParam; j++) {
+				sum += probMatrix[i][j];
+			}
+			postProbList.add(sum / samplesParam);
+		}
+		
+		//R code function post_p
+		for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
+			//R code prior
+			
+			int[] sampleCount = new int[maxGroupId];
+			for (int i = 0; i < maxGroupId; i++) {
 				sampleCount[i] = 0;
 			}
 			for (int read = 0; read < readId; read++) {
 				sampleCount[zMatrix.get(read).get(sampleId) - 1]++;
 			}
 			
-			List<Double> priorProbList = new ArrayList<Double>(maxSampleGroup + 1);
-			for (int i = 0; i < maxSampleGroup; i++) {
-				priorProbList.add(sampleCount[i]/(alpha + readId));
-			}
-			priorProbList.add(alpha/(alpha + readId));
-			
-//			for (int i = 0; i < priorProbList.size();i++) {
-//				System.out.println(priorProbList.get(i));
-//			}
-			
-			for (int groupId = 1; groupId <= maxSampleGroup + 1; groupId++) {
-				List<Double> transProbList = transProbability(singleReadList, zMatrix, readId, sampleId, groupId);
-//				System.out.println("group: " + groupId);
-//				for(int i = 0; i < transProbList.size(); i++) {
-//					System.out.println(transProbList.get(i));
-//				}
-				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId) * priorProbList.get(groupId - 1) * startP;
-				for (int k = 0; k < transProbList.size(); k++) {
-					probMatrix[groupId - 1][sampleId] *= Math.pow(transProbList.get(k), singleReadList.get(readId).getTransCountList().get(k));
+			List<Double> priorProbList = new ArrayList<Double>(maxGroupId + 1);
+			int countZero = 1;
+			for (int i = 0; i < maxGroupId; i++) {
+				if (sampleCount[i] > 0) {
+					priorProbList.add(sampleCount[i]/(alpha + readId));
+				} else {
+					priorProbList.add(0.0);
+					countZero++;
 				}
+			}
+			priorProbList.add(alpha/(alpha + readId)/countZero);
+			for (int i = 0; i < maxGroupId; i++) {
+				if (sampleCount[i] == 0) {
+					priorProbList.set(i, alpha/(alpha + readId)/countZero);
+				}
+			}
+					
+			for (int groupId = 1; groupId <= maxGroupId + 1; groupId++) {
+				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId) * priorProbList.get(groupId - 1) * postProbList.get(groupId - 1);
 			}
 			
 		}
@@ -169,10 +227,8 @@ public class SMC {
 			for (int j = 0; j < samplesParam; j++) {
 				sum += probMatrix[i][j];
 			}
-//			System.out.println("group: " + i);
-//			System.out.println("sum " + sum);
 			totalSum += sum;
-			postProbList.add(sum);
+			postProbList.set(i, sum);
 		}
 		
 		for (int i = 0; i < maxGroupId + 1; i++) {
@@ -230,20 +286,20 @@ public class SMC {
 			
 			//System.out.println(startP);
 			
-			int maxSampleGroup = 1;
-			for(int i = 1; i <= readId; i++) {
-				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
-					maxSampleGroup = zMatrix.get(i).get(sampleId);
-				}
-			}
+//			int maxSampleGroup = 1;
+//			for(int i = 1; i <= readId; i++) {
+//				if (zMatrix.get(i).get(sampleId) > maxSampleGroup) {
+//					maxSampleGroup = zMatrix.get(i).get(sampleId);
+//				}
+//			}
 			List<Double> transProbList = transProbability(singleReadList, zMatrix, readId, sampleId, zMatrix.get(readId).get(sampleId));
-			System.out.println(sampleId);
-			System.out.println(zMatrix.get(readId).get(sampleId));
-			for (int i = 0; i < transProbList.size(); i++) {
-				System.out.print(transProbList.get(i));
-				System.out.print('\t');
-			}
-			System.out.println();
+//			System.out.println(sampleId);
+//			System.out.println(zMatrix.get(readId).get(sampleId));
+//			for (int i = 0; i < transProbList.size(); i++) {
+//				System.out.print(transProbList.get(i));
+//				System.out.print('\t');
+//			}
+//			System.out.println();
 			double probability = weightList.get(sampleId) * startP;
 			for (int k = 0; k < transProbList.size(); k++) {
 				probability *= Math.pow(transProbList.get(k), singleReadList.get(readId).getTransCountList().get(k));
@@ -280,8 +336,8 @@ public class SMC {
 		
 		System.out.println("Initializing...");
 		
-		//readsParam = contentList.size();
-		readsParam = 2;
+		readsParam = contentList.size();
+		//readsParam = 2;
 		
 		//Initialize important weight matrix W(z)
 		List<List<Integer>> zMatrix = new ArrayList<List<Integer>>(readsParam);
@@ -312,12 +368,12 @@ public class SMC {
 			singleReadList.add(new SingleRead(contentList.get(readId), samplesParam, transOrderParam, permutationList));
 		}
 		
-		System.out.println(singleReadList.get(0).getContent());
-		for (int i = 0; i < 16; i++) {
-			System.out.print(singleReadList.get(1).getTransCountwithReverseList().get(i));
-			System.out.print('\t');
-		}
-		System.out.println();
+//		System.out.println(singleReadList.get(0).getContent());
+//		for (int i = 0; i < 16; i++) {
+//			System.out.print(singleReadList.get(1).getTransCountwithReverseList().get(i));
+//			System.out.print('\t');
+//		}
+//		System.out.println();
 		
 		System.out.println("Complete \n Calculating...");
 		
@@ -428,7 +484,7 @@ public class SMC {
 	
 	public static void main(String[] args) throws Exception {
 		//trueMain(args);
-		mainTask("/Users/mac/Desktop/6008/someProject/test.txt", 0.5, 100, 2);
+		mainTask("/home/xinping/Desktop/6008/test.txt", 0.5, 100, 2);
 		//System.out.println(testCountSubstr("AAA","AA"));
 	}
 	
