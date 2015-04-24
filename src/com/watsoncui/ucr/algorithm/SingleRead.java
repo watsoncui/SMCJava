@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class SingleRead {
 	private String content;
@@ -21,6 +19,7 @@ public class SingleRead {
 		fillLists(permutationList);
 	}
 	
+	//R code: function trans and trans_4read
 	private void fillLists(List<String> permutationList) {
 		char[] charList = content.toUpperCase().toCharArray();
 		for (int i = 0; i < charList.length; i++) {
@@ -45,10 +44,12 @@ public class SingleRead {
 		String reverse = (new StringBuilder(content)).reverse().toString();
 		String bChainReverse = (new StringBuilder(bChain)).reverse().toString();
 		this.transCountList = countSubstr(content, permutationList);
-		List<Integer> temp = countSubstr(bChain, permutationList);
+		List<Integer> bChainCount = countSubstr(bChain, permutationList);
+		List<Integer> reverseCount = countSubstr(reverse, permutationList);
+		List<Integer> bChainReverseCount = countSubstr(bChainReverse, permutationList);
 		this.transCountwithReverseList = new ArrayList<Integer>(permutationList.size());
 		for (int i = 0; i < permutationList.size(); i++) {
-			this.transCountwithReverseList.add(temp.get(i) + this.transCountList.get(i));
+			this.transCountwithReverseList.add(bChainCount.get(i) + bChainReverseCount.get(i) + reverseCount.get(i) + this.transCountList.get(i));
 		}
 		
 	}
