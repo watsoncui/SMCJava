@@ -6,17 +6,31 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 public class SMCEvolution {
+	public final static boolean USEGCORDER = false;
+	public final static int TRANSORDERPARAM = 1;
+	public final static int SAMPLESPARAM = 100;
+	public final static double ALPHAPARAM = 0.0000001;
+	public final static double THRESHOLDPARAM = 0.9;
+	
+	public static List<String> getPermutations(char[] charList, int depth) {
+		return SMC.getPermutations(charList, depth);
+	}
 
-	public static void mainTask(String fileName, double alphaParam, int samplesParam, int transOrderParam, boolean useGCOrder) throws Exception {
+	public static void mainTask(String fileName, double alphaParam, int samplesParam, int transOrderParam, double thresholdParam, boolean useGCOrder) throws Exception {
 		//parameters
 
 		System.out.println("alphaParam = " + alphaParam);
 		System.out.println("samplesParam = " + samplesParam);
 		System.out.println("transOrderParam = " + transOrderParam);
+		System.out.println("thresholdParam = " + thresholdParam);
+		if (useGCOrder) {
+			System.out.println("Use GC Order");
+		}
 		int readsParam;
 		List<String> contentList = new ArrayList<String>();
 		
@@ -54,15 +68,20 @@ public class SMCEvolution {
 		//Initialize weight list w
 		List<Double> weightList = new ArrayList<Double>(samplesParam);
 		for (int j = 0; j < samplesParam; j++) {
-			weightList.add(1.0/samplesParam);
+			weightList.add(1.0 / samplesParam);
 		}
 		
 		//Initialize permutation count matrix
 		char[] charArray = {'A', 'C', 'G', 'T'};
-		List<String> permutationList =  getPermutations(charArray, transOrderParam);
-		List<SingleRead> singleReadList = new ArrayList<SingleRead>(readsParam);
+		List<String> permutationList =  getPermutations(charArray, transOrderParam + 1);
+		List<DoubleRead> doubleReadList = new ArrayList<DoubleRead>(readsParam);
 		for (int readId = 0; readId < readsParam; readId++) {
-			singleReadList.add(new SingleRead(contentList.get(readId), samplesParam, transOrderParam, permutationList));
+			doubleReadList.add(new DoubleRead(readId + 1, contentList.get(readId * 2), contentList.get(readId * 2 + 1), transOrderParam, permutationList));
+		}
+		
+		if (useGCOrder) {
+			System.out.println("Sort according to GCOrder...");
+			Collections.sort(doubleReadList, new DoubleReadCompare());
 		}
 		
 		System.out.println("Complete \n Calculating...");
@@ -75,7 +94,7 @@ public class SMCEvolution {
 			System.out.println(readId);
 			System.out.println("Posterior Probability");
 			
-			List<Double> posteriorList = postProbability(singleReadList, zMatrix, weightList, readId, maxGroupId, samplesParam, alphaParam);
+			List<Double> posteriorList = postProbability(doubleReadList, zMatrix, weightList, readId, maxGroupId, samplesParam, alphaParam);
 			
 			for (int i = 0; i < posteriorList.size(); i++) {
 				System.out.println(posteriorList.get(i));
@@ -101,7 +120,7 @@ public class SMCEvolution {
 			System.out.println(count_1);
 			System.out.println("Updating weight");
 			
-			weightList = updateWeightList(singleReadList, zMatrix, weightList, readId, samplesParam);
+			weightList = updateWeightList(doubleReadList, zMatrix, weightList, readId, samplesParam);
 			for (int i = 0; i < weightList.size(); i++) {
 				System.out.print(weightList.get(i));
 				System.out.print('\t');
@@ -131,11 +150,11 @@ public class SMCEvolution {
 	}
 	
 	public static void frontEnd(String[] args) throws Exception {
-		int transOrderParam = 1;
-		double alphaParam = 0.0000001;
-		double thresholdParam = 0.9;
-		int samplesParam = 100;
-		boolean useGCOrder = false;
+		int transOrderParam = TRANSORDERPARAM;
+		double alphaParam = ALPHAPARAM;
+		double thresholdParam = THRESHOLDPARAM;
+		int samplesParam = SAMPLESPARAM;
+		boolean useGCOrder = USEGCORDER;
 		int pos = 0;
 		while (pos < args.length - 1) {
 			if (args[pos].charAt(0) == '-') {
@@ -145,11 +164,11 @@ public class SMCEvolution {
 					try {
 						alphaParam = Double.parseDouble(args[pos + 1]);
 					} catch (NullPointerException npe) {
-						System.out.println("Param alpha error! Use default value 0.01");
-						alphaParam = 0.01;
+						System.out.println("Param alpha error! Use default value " + ALPHAPARAM);
+						alphaParam = ALPHAPARAM;
 					} catch (NumberFormatException nfe) {
-						System.out.println("Param alpha parse error! Use default value 0.01");
-						alphaParam = 0.01;
+						System.out.println("Param alpha parse error! Use default value " + ALPHAPARAM);
+						alphaParam = ALPHAPARAM;
 					}
 					pos += 2;
 					break;
@@ -157,12 +176,39 @@ public class SMCEvolution {
 				case 'N':
 					try {
 						samplesParam = Integer.parseInt(args[pos + 1]);
+					} catch (NullPointerException npe) {
+						System.out.println("Param sample_number error! Use default value " + SAMPLESPARAM);
+						samplesParam = SAMPLESPARAM;
 					} catch (NumberFormatException nfe) {
-						System.out.println("Param sample number parse error! Use default value 100");
-						samplesParam = 100;
+						System.out.println("Param sample_number parse error! Use default value " + SAMPLESPARAM);
+						samplesParam = SAMPLESPARAM;
 					}
 					pos += 2;
 					break;
+				case 'm':
+				case 'M':
+					try {
+						transOrderParam = Integer.parseInt(args[pos + 1]);
+					} catch (NullPointerException npe) {
+						System.out.println("Param transorder_number error! Use default value " + TRANSORDERPARAM);
+						transOrderParam = TRANSORDERPARAM;
+					} catch (NumberFormatException nfe) {
+						System.out.println("Param transorder_number parse error! Use default value " + TRANSORDERPARAM);
+						transOrderParam = TRANSORDERPARAM; 
+					}
+					pos += 2;
+					break;
+				case 't':
+				case 'T':
+					try {
+						thresholdParam = Double.parseDouble(args[pos + 1]);
+					} catch (NullPointerException npe) {
+						System.out.println("Param threshold error! Use default value " + THRESHOLDPARAM);
+						thresholdParam = THRESHOLDPARAM;
+					} catch (NumberFormatException nfe) {
+						System.out.println("Param threshold parse error! Use default value " + THRESHOLDPARAM);
+						thresholdParam = THRESHOLDPARAM;
+					}
 				case 'g':
 				case 'G':
 					useGCOrder = true;
@@ -176,7 +222,7 @@ public class SMCEvolution {
 				pos++;	
 			}
 		}
-		mainTask(args[args.length - 1], alphaParam, samplesParam, transOrderParam, useGCOrder);
+		mainTask(args[args.length - 1], alphaParam, samplesParam, transOrderParam, thresholdParam, useGCOrder);
 	}
 	
 	public static void main(String[] args) throws Exception {

@@ -7,16 +7,45 @@ import java.util.TreeMap;
 
 public class DoubleRead {
 
+	private int id;
 	private String readA;
 	private String readB;
 	private int transOrder;
 	private List<Integer> countList;
+	private double GC;
 	
 	public DoubleRead(String readA, String readB, int transOrder, List<String> permutationList) {
 		this.readA = readA;
 		this.readB = readB;
 		this.transOrder = transOrder;
 		fillCountList(permutationList);
+		calculateGC();
+	}
+	
+	public DoubleRead(int id, String readA, String readB, int transOrder, List<String> permutationList) {
+		this.id = id;
+		this.readA = readA;
+		this.readB = readB;
+		this.transOrder = transOrder;
+		fillCountList(permutationList);
+		calculateGC();
+	}
+	
+	private void calculateGC() {
+		int gcCount = 0;
+		char[] charList = readA.toUpperCase().toCharArray();
+		for (char c : charList) {
+			if (('C' == c) || ('G' == c)) {
+				gcCount++;
+			}
+		}
+		charList = readB.toUpperCase().toCharArray();
+		for (char c : charList) {
+			if (('C' == c) || ('G' == c)) {
+				gcCount++;
+			}
+		}
+		GC = (gcCount + 0.0) / (readA.length() + readB.length());
 	}
 	
 	private String getTransReverse(String origin) {
@@ -69,6 +98,14 @@ public class DoubleRead {
 		countList = countMerForList(dataList, permutationList);
 	}
 	
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
 	public String getReadA() {
 		return readA;
 	}
@@ -100,4 +137,45 @@ public class DoubleRead {
 	public void setCountList(List<Integer> countList) {
 		this.countList = countList;
 	}
+
+	public double getGC() {
+		return GC;
+	}
+
+	public void setGC(double gC) {
+		GC = gC;
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((readA == null) ? 0 : readA.hashCode());
+		result = prime * result + ((readB == null) ? 0 : readB.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		DoubleRead other = (DoubleRead) obj;
+		if (readA == null) {
+			if (other.readA != null)
+				return false;
+		} else if (!readA.equals(other.readA))
+			return false;
+		if (readB == null) {
+			if (other.readB != null)
+				return false;
+		} else if (!readB.equals(other.readB))
+			return false;
+		return true;
+	}
+
+	
 }
