@@ -48,7 +48,7 @@ public class DoubleRead {
 		GC = (gcCount + 0.0) / (readA.length() + readB.length());
 	}
 	
-	private String getTransReverse(String origin) {
+	public String getTransReverse(String origin) {
 		char[] charList = origin.toUpperCase().toCharArray();
 		for (int i = 0; i < charList.length; i++) {
 			switch (charList[i]) {
