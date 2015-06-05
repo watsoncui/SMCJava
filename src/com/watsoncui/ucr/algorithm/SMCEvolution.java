@@ -19,75 +19,126 @@ public class SMCEvolution {
 	public final static double ALPHAPARAM = 0.0000001;
 	public final static double THRESHOLDPARAM = 0.9;
 
+	public final static double FILTERZERO = 0.00000001;
+
+	public static List<Integer> getGlobalCountList(
+			List<DoubleRead> doubleReadList) {
+		List<Integer> result = doubleReadList.get(0).getCountList();
+		for (int i = 1; i < doubleReadList.size(); i++) {
+			List<Integer> temp = doubleReadList.get(i).getCountList();
+			for (int j = 0; j < result.size(); j++) {
+				result.set(j, result.get(j) + temp.get(j));
+			}
+		}
+		return result;
+	}
+
 	public static List<String> getPermutations(char[] charList, int depth) {
 		return SMC.getPermutations(charList, depth);
 	}
 
 	public static List<Integer> samplingFromProbability(
-			List<Double> posteriorList, Random generator, int samples) {
-		return SMC.samplingFromProbability(posteriorList, generator, samples);
+			List<Double> probabilityList, Random generator, int samples) {
+		return SMC.samplingFromProbability(probabilityList, generator, samples);
 	}
-	
-	//R code: function star_p
-		public static List<List<Double>> startProbability(Map<Integer, List<Integer>> accuCountMap, List<DoubleRead> doubleReadList, List<List<Integer>> zMatrix, int readId, int sampleId, int maxGroupId) {
-			List<List<Double>> resultList = new ArrayList<List<Double>>(maxGroupId);
-			for (int groupId = 1; groupId <= maxGroupId + 1; groupId++) {
-				List<Integer> accuCountList = new ArrayList<Integer>();
-				List<Integer> transCountList = doubleReadList.get(readId).getCountList();
-				int step = transCountList.size() / 4;
-				for (int j = 0; j < transCountList.size(); j+=step) {
-					Integer sum = transCountList.get(j);
-					for (int k = j + 1; k < j + step; k++) {
-						sum += transCountList.get(k);
-					}
-					accuCountList.add(sum);
-				}
-				if (accuCountMap.containsKey(groupId)) {
-					transCountList = accuCountMap.get(groupId);
-					for (int j = 0; j < transCountList.size(); j+=step) {
-						Integer sum = transCountList.get(j);
-						for (int k = j + 1; k < j + step; k++) {
-							sum += transCountList.get(k);
-						}
-						accuCountList.set(j/step, sum + accuCountList.get(j/step));
-					}
-				}
-				
-				int accuSum = 0;
-				for (Integer count:accuCountList) {
-					accuSum += count;
-				}
-				
-				List<Double> startProbList = new ArrayList<Double>(accuCountList.size());
-				
-				for (int i = 0; i < accuCountList.size(); i++) {
-					startProbList.add(((double) accuCountList.get(i)) / accuSum);
-				}
-				
-				resultList.add(startProbList);
+
+	public static double getEfficiency(List<Double> dataList) {
+		double efficiency = 0.0;
+		if ((null != dataList) && (0 < dataList.size())) {
+			double reverseEfficiency = 0.0;
+			for (Double data : dataList) {
+				reverseEfficiency += (data * data);
 			}
-			
-			return resultList;
+			if (reverseEfficiency < 1.0 / dataList.size()) {
+				efficiency = dataList.size();
+			} else {
+				efficiency = 1.0 / reverseEfficiency;
+			}
 		}
+		return efficiency;
+	}
+
+	public static List<Integer> getResampleList(List<Integer> originList,
+			List<Double> probList, Random generator) {
+		List<Integer> resultList = samplingFromProbability(probList, generator,
+				originList.size());
+		for (int i = 0; i < resultList.size(); i++) {
+			Integer element = originList.get(resultList.get(i) - 1);
+			resultList.set(i, element);
+		}
+		return resultList;
+	}
+
+	public static List<Integer> getAccuCountList(List<Integer> countList,
+			int step) {
+		List<Integer> accuCountList = new ArrayList<Integer>();
+		for (int j = 0; j < countList.size(); j += step) {
+			Integer sum = countList.get(j);
+			for (int k = j + 1; k < j + step; k++) {
+				sum += countList.get(k);
+			}
+			accuCountList.add(sum);
+		}
+		return accuCountList;
+	}
+
+	// R code: function star_p
+	public static List<List<Double>> startProbability(
+			Map<Integer, List<Integer>> accuCountMap,
+			List<DoubleRead> doubleReadList, List<List<Integer>> zMatrix,
+			List<Integer> globalCountList, int readId, int sampleId,
+			int maxGroupId) {
+		List<List<Double>> resultList = new ArrayList<List<Double>>(maxGroupId);
+		for (int groupId = 1; groupId <= maxGroupId + 1; groupId++) {
+			List<Integer> accuCountList = new ArrayList<Integer>();
+			if (accuCountMap.containsKey(groupId)) {
+				accuCountList = getAccuCountList(accuCountMap.get(groupId),
+						globalCountList.size() / 4);
+			} else {
+				accuCountList = getAccuCountList(globalCountList,
+						globalCountList.size() / 4);
+			}
+
+			int accuSum = 0;
+			for (Integer count : accuCountList) {
+				accuSum += count;
+			}
+
+			List<Double> startProbList = new ArrayList<Double>(
+					accuCountList.size());
+
+			for (int i = 0; i < accuCountList.size(); i++) {
+				startProbList.add(((double) accuCountList.get(i)) / accuSum);
+			}
+
+			resultList.add(startProbList);
+		}
+
+		return resultList;
+	}
+
+	public static List<Double> filterZero(List<Double> dataList, double min) {
+		List<Double> result = new ArrayList<Double>();
+		for (int i = 0; i < dataList.size(); i++) {
+			if (dataList.get(i) < min) {
+				result.add(min);
+			} else {
+				result.add(dataList.get(i));
+			}
+		}
+		return result;
+	}
 
 	// R code: trans_p
 	public static List<Double> transProbability(
 			Map<Integer, List<Integer>> accuCountMap,
 			List<DoubleRead> doubleReadList, List<List<Integer>> zMatrix,
-			int readId, int sampleId, int groupId) {
+			List<Integer> globalCountList, int readId, int sampleId, int groupId) {
 		List<Integer> accuCountList = new ArrayList<Integer>();
-		List<Integer> transCountList = doubleReadList.get(readId)
-				.getCountList();
-		for (int j = 0; j < transCountList.size(); j++) {
-			accuCountList.add(transCountList.get(j));
-		}
-
 		if (accuCountMap.containsKey(groupId)) {
-			transCountList = accuCountMap.get(groupId);
-			for (int j = 0; j < transCountList.size(); j++) {
-				accuCountList.set(j,
-						transCountList.get(j) + accuCountList.get(j));
-			}
+			accuCountList = accuCountMap.get(groupId);
+		} else {
+			accuCountList = globalCountList;
 		}
 
 		List<Double> transProbList = new ArrayList<Double>(accuCountList.size());
@@ -101,7 +152,7 @@ public class SMCEvolution {
 				transProbList.add(((double) accuCountList.get(j)) / accuSum);
 			}
 		}
-		return transProbList;
+		return filterZero(transProbList, FILTERZERO);
 	}
 
 	public static int getStartPoint(char c, boolean origin) {
@@ -143,8 +194,8 @@ public class SMCEvolution {
 	public static List<Double> updateWeightList(
 			List<Map<Integer, List<Integer>>> sampleCountSum,
 			List<DoubleRead> doubleReadList, List<List<Integer>> zMatrix,
-			List<Double> weightList, int readId, int samplesParam,
-			int maxGroupId) {
+			List<Double> weightList, List<Integer> globalCountList, int readId,
+			int samplesParam, int maxGroupId) {
 		List<Double> newWeightList = new ArrayList<Double>(weightList.size());
 		DoubleRead dr = doubleReadList.get(readId);
 		int[] startPos = {
@@ -158,10 +209,11 @@ public class SMCEvolution {
 		for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
 			List<List<Double>> startP = startProbability(
 					sampleCountSum.get(sampleId), doubleReadList, zMatrix,
-					readId, sampleId, maxGroupId);
+					globalCountList, readId, sampleId, maxGroupId);
 			List<Double> transProbList = transProbability(
 					sampleCountSum.get(sampleId), doubleReadList, zMatrix,
-					readId, sampleId, zMatrix.get(readId).get(sampleId));
+					globalCountList, readId, sampleId,
+					zMatrix.get(readId).get(sampleId));
 			double probability = weightList.get(sampleId);
 			for (int k = 0; k < startPos.length; k++) {
 				probability *= startP
@@ -169,8 +221,14 @@ public class SMCEvolution {
 								startPos[k]);
 			}
 			for (int k = 0; k < transProbList.size(); k++) {
-				probability *= Math.pow(transProbList.get(k), doubleReadList
-						.get(readId).getCountList().get(k));
+//				probability *= Math.pow(
+//						Math.E,
+//						transProbList.get(k)
+//								* Math.log(doubleReadList.get(readId)
+//										.getCountList().get(k)));
+				 probability *= Math.pow(transProbList.get(k), doubleReadList
+				 .get(readId).getCountList().get(k));
+
 			}
 			totalSum += probability;
 			newWeightList.add(probability);
@@ -184,8 +242,8 @@ public class SMCEvolution {
 	public static List<Double> postProbability(
 			List<Map<Integer, List<Integer>>> sampleCountSum,
 			List<DoubleRead> doubleReadList, List<List<Integer>> zMatrix,
-			List<Double> weightList, int readId, int maxGroupId,
-			int samplesParam, double alpha) {
+			List<Double> weightList, List<Integer> globalCountList, int readId,
+			int maxGroupId, int samplesParam, double alpha) {
 
 		List<Double> postProbList = new ArrayList<Double>(maxGroupId + 1);
 		DoubleRead dr = doubleReadList.get(readId);
@@ -209,20 +267,25 @@ public class SMCEvolution {
 
 			List<List<Double>> startP = startProbability(
 					sampleCountSum.get(sampleId), doubleReadList, zMatrix,
-					readId, sampleId, maxGroupId);
+					globalCountList, readId, sampleId, maxGroupId);
 			for (int groupId = 1; groupId <= maxGroupId + 1; groupId++) {
 				List<Double> transProbList = transProbability(
 						sampleCountSum.get(sampleId), doubleReadList, zMatrix,
-						readId, sampleId, groupId);
+						globalCountList, readId, sampleId, groupId);
 				probMatrix[groupId - 1][sampleId] = weightList.get(sampleId);
 				for (int k = 0; k < startPos.length; k++) {
 					probMatrix[groupId - 1][sampleId] *= startP
 							.get(groupId - 1).get(startPos[k]);
 				}
 				for (int k = 0; k < transProbList.size(); k++) {
-					probMatrix[groupId - 1][sampleId] *= Math.pow(
-							transProbList.get(k), doubleReadList.get(readId)
-									.getCountList().get(k));
+//					probMatrix[groupId - 1][sampleId] *= Math.pow(
+//							Math.E,
+//							transProbList.get(k)
+//									* Math.log(doubleReadList.get(readId)
+//											.getCountList().get(k)));
+					 probMatrix[groupId - 1][sampleId] *= Math.pow(
+					 transProbList.get(k), doubleReadList.get(readId)
+					 .getCountList().get(k));
 				}
 			}
 
@@ -287,6 +350,28 @@ public class SMCEvolution {
 			postProbList.set(i, postProbList.get(i) / totalSum);
 		}
 		return postProbList;
+	}
+
+	public static void weightListPrinter(PrintWriter pw,
+			List<Double> weightList, int readId) {
+		StringBuffer sb = new StringBuffer();
+		sb.append(readId);
+		for (Double weight : weightList) {
+			sb.append('\t');
+			sb.append(weight);
+		}
+		pw.println(sb.toString());
+	}
+
+	public static void zListPrinter(PrintWriter pw, List<Integer> zList,
+			int readId) {
+		StringBuffer sb = new StringBuffer();
+		sb.append(readId);
+		for (Integer z : zList) {
+			sb.append('\t');
+			sb.append(z);
+		}
+		pw.println(sb.toString());
 	}
 
 	public static void mainTask(String fileName, double alphaParam,
@@ -360,6 +445,8 @@ public class SMCEvolution {
 
 		System.out.println("Complete \n Calculating...");
 
+		List<Integer> globalCountList = getGlobalCountList(doubleReadList);
+
 		int maxGroupId = 1;
 
 		// Init the intermediate result of every sample
@@ -371,6 +458,15 @@ public class SMCEvolution {
 			sampleCountSum.add(groupVectorMap);
 		}
 
+		PrintWriter weightPw = new PrintWriter(new FileWriter(new File(
+				"output_weight.txt")));
+		PrintWriter zListPw = new PrintWriter(new FileWriter(new File(
+				"output_zlist.txt")));
+		weightListPrinter(weightPw, weightList, 0);
+		zListPrinter(zListPw, zMatrix.get(0), 0);
+
+		Random generator = new Random();
+
 		// Core calculation
 		for (int readId = 1; readId < readsParam; readId++) {
 
@@ -378,23 +474,18 @@ public class SMCEvolution {
 			System.out.println("Posterior Probability");
 
 			List<Double> posteriorList = postProbability(sampleCountSum,
-					doubleReadList, zMatrix, weightList, readId, maxGroupId,
-					samplesParam, alphaParam);
+					doubleReadList, zMatrix, weightList, globalCountList,
+					readId, maxGroupId, samplesParam, alphaParam);
 
 			for (int i = 0; i < posteriorList.size(); i++) {
 				System.out.println(posteriorList.get(i));
 			}
 
 			System.out.println("Sampling");
-			Random generator = new Random();
+
 			List<Integer> zList = samplingFromProbability(posteriorList,
 					generator, samplesParam);
-			for (Integer groupId : zList) {
-				if (groupId > maxGroupId) {
-					maxGroupId = groupId;
-					break;
-				}
-			}
+
 			zMatrix.set(readId, zList);
 
 			int count_1 = 0;
@@ -407,33 +498,51 @@ public class SMCEvolution {
 			System.out.println("Updating weight");
 
 			weightList = updateWeightList(sampleCountSum, doubleReadList,
-					zMatrix, weightList, readId, samplesParam, maxGroupId);
-			for (int i = 0; i < weightList.size(); i++) {
-				System.out.print(weightList.get(i));
-				System.out.print('\t');
+					zMatrix, weightList, globalCountList, readId, samplesParam,
+					maxGroupId);
+			weightListPrinter(weightPw, weightList, readId);
+
+			if (getEfficiency(weightList) < thresholdParam * samplesParam) {
+				List<Integer> resampleList = getResampleList(zList, weightList,
+						generator);
+				zMatrix.set(readId, resampleList);
+				weightList = new ArrayList<Double>(samplesParam);
+				for (int j = 0; j < samplesParam; j++) {
+					weightList.add(1.0 / samplesParam);
+				}
+				weightListPrinter(weightPw, weightList, readId);
 			}
-			System.out.println();
-		}
+			zListPrinter(zListPw, zMatrix.get(readId), readId);
 
-		System.out.println("Calculate complete \n Printing...");
-
-		PrintWriter pw = new PrintWriter(new FileWriter(new File("output.txt")));
-		for (Double weight : weightList) {
-			pw.print(weight);
-			pw.print('\t');
-		}
-		pw.println();
-		pw.println();
-
-		for (int i = 0; i < zMatrix.size(); i++) {
-			for (int j = 0; j < zMatrix.get(i).size(); j++) {
-				pw.print(zMatrix.get(i).get(j));
-				pw.print('\t');
+			for (int sampleId = 0; sampleId < samplesParam; sampleId++) {
+				Map<Integer, List<Integer>> groupVectorMap = sampleCountSum
+						.get(sampleId);
+				Integer key = zMatrix.get(readId).get(sampleId);
+				List<Integer> transCountList = doubleReadList.get(readId)
+						.getCountList();
+				if (groupVectorMap.containsKey(key)) {
+					List<Integer> sumList = groupVectorMap.get(key);
+					for (int i = 0; i < sumList.size(); i++) {
+						sumList.set(i, sumList.get(i) + transCountList.get(i));
+					}
+				} else {
+					groupVectorMap.put(key, transCountList);
+				}
+				sampleCountSum.set(sampleId, groupVectorMap);
 			}
-			pw.println();
+
+			for (Integer groupId : zList) {
+				if (groupId > maxGroupId) {
+					maxGroupId = groupId;
+					break;
+				}
+			}
 		}
 
-		pw.close();
+		System.out.println("Calculate complete");
+
+		zListPw.close();
+		weightPw.close();
 	}
 
 	public static void frontEnd(String[] args) throws Exception {
@@ -529,9 +638,40 @@ public class SMCEvolution {
 				transOrderParam, thresholdParam, useGCOrder);
 	}
 
+	public static void printHelp() {
+		System.out.println("Usage: ");
+		System.out
+				.println("\tjava -jar SMCalpha.jar abundance_species_equal.txt");
+		System.out.println("The file contains pair-end sequence");
+		System.out.println("More Usage: ");
+		System.out
+				.println("\tjava -jar SMCalpha.jar [OPTION] abundance_species_equal.txt");
+		System.out.println("Options:");
+		System.out
+				.println("\t-a:\tThe value followed will be the alpha parameter");
+		System.out.println("\t   \tDefault value 0.0000001");
+		System.out
+				.println("\t-n:\tThe value followed will be the sample number parameter");
+		System.out.println("\t   \tDefault value 100");
+		System.out
+				.println("\t-m:\tThe value followed will be the alpha parameter");
+		System.out.println("\t   \tDefault value 1");
+		System.out
+				.println("\t-t:\tThe value followed will be the threshold parameter");
+		System.out.println("\t   \tDefault value 0.9");
+		System.out
+				.println("\t-g:\tChoose to use GC order the origin datas first");
+	}
+
 	public static void main(String[] args) throws Exception {
+		// mainTask("/home/xinping/Desktop/6008/test.txt", 0.001, 100, 1, 0.9,
+		// true);
 		// TODO Auto-generated method stub
-		frontEnd(args);
+		if (args.length == 0) {
+			printHelp();
+		} else {
+			frontEnd(args);
+		}
 	}
 
 }
